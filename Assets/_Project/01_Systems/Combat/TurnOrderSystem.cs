@@ -23,11 +23,16 @@ namespace GameName.Systems
         public void OnUpdate(ref SystemState state)
         {
             // Check if anyone currently has active turn
-            var hasActiveTurn = SystemAPI.HasSingleton<ActiveTurnTag>();
+            var hasActiveTurn = false;
+            foreach (var _ in SystemAPI.Query<RefRO<ActiveTurnTag>>())
+            {
+                hasActiveTurn = true;
+                break;
+            }
 
             if (!hasActiveTurn)
             {
-                // Find combatant with highest initiative who hasn't acted
+                // Find combatant with highest initiative who hasn't acted yet
                 Entity highestInitiativeEntity = Entity.Null;
                 int highestInitiative = int.MinValue;
 
@@ -36,7 +41,7 @@ namespace GameName.Systems
                                    RefRO<CombatantComponent>>()
                         .WithEntityAccess()
                         .WithAll<InCombatTag>()
-                        .WithNone<ActiveTurnTag, DefeatedTag>())
+                        .WithNone<ActiveTurnTag, DefeatedTag, HasActedThisRoundTag>())
                 {
                     if (initiative.ValueRO.Total > highestInitiative)
                     {
@@ -50,17 +55,26 @@ namespace GameName.Systems
                 {
                     state.EntityManager.AddComponent<ActiveTurnTag>(
                         highestInitiativeEntity);
+                    state.EntityManager.AddComponent<HasActedThisRoundTag>(
+                        highestInitiativeEntity);
                 }
                 else
                 {
-                    // No one left to act - round complete
-                    // Remove all ActiveTurnTag components to reset
-                    var query = SystemAPI.QueryBuilder()
-                        .WithAll<ActiveTurnTag>()
-                        .Build();
-                    state.EntityManager.RemoveComponent<ActiveTurnTag>(query);
+                    // No one left to act - round complete, reset for new round
+                    var ecb = new EntityCommandBuffer(Allocator.Temp);
 
-                    // Could trigger TurnEndTag here for round end logic
+                    // Remove all HasActedThisRoundTag components
+                    foreach (var entity in
+                        SystemAPI.QueryBuilder()
+                            .WithAll<HasActedThisRoundTag>()
+                            .Build()
+                            .ToEntityArray(Allocator.Temp))
+                    {
+                        ecb.RemoveComponent<HasActedThisRoundTag>(entity);
+                    }
+
+                    ecb.Playback(state.EntityManager);
+                    ecb.Dispose();
                 }
             }
         }

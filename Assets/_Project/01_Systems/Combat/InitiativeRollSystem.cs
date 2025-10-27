@@ -7,23 +7,30 @@ namespace GameName.Systems
 {
     /// <summary>
     /// Rolls initiative (d20 + Speed) for all combatants at combat start
+    /// Uses shared RandomSeedSingleton to ensure Server and Client get same rolls
     /// </summary>
     [BurstCompile]
     [UpdateInGroup(typeof(SimulationSystemGroup))]
     public partial struct InitiativeRollSystem : ISystem
     {
+        private Random random;
+
         [BurstCompile]
         public void OnCreate(ref SystemState state)
         {
-            // Require BeginCombatTag to exist before running
+            // Require both BeginCombatTag and RandomSeedSingleton
             state.RequireForUpdate<BeginCombatTag>();
+            state.RequireForUpdate<RandomSeedSingleton>();
         }
 
         [BurstCompile]
         public void OnUpdate(ref SystemState state)
         {
-            // Create random seed based on current tick
-            var random = Random.CreateFromIndex((uint)state.WorldUnmanaged.Time.ElapsedTime);
+            // Get seed from singleton (same for Server and Client)
+            var seed = SystemAPI.GetSingleton<RandomSeedSingleton>().Seed;
+
+            // Initialize random with shared seed
+            random = Random.CreateFromIndex(seed);
 
             // Roll initiative for all combatants
             foreach (var (initiative, stats) in

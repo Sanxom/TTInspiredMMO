@@ -51,4 +51,10 @@ namespace GameName.ComponentData
     /// Singleton tag - AI is making decision
     /// </summary>
     public struct AITurnActiveTag : IComponentData { }
+
+    /// <summary>
+    /// Tag to mark that a combatant has already acted this round
+    /// Removed at end of round to reset turn order
+    /// </summary>
+    public struct HasActedThisRoundTag : IComponentData { }
 }
