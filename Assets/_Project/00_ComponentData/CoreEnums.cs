@@ -91,7 +91,8 @@ namespace GameName.ComponentData
         Nature = 8,
         Death = 9,
         Psychic = 10,
-        Time = 11
+        Time = 11,
+        Healing = 12
     }
 
     /// <summary>

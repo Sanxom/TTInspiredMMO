@@ -68,6 +68,20 @@ namespace GameName.Systems
                     IsAlive = true
                 });
 
+                em.AddComponentData(playerEntity, new BasicAttackAbility
+                {
+                    ManaCost = 0,
+                    WeaponDamageBonus = 5,
+                    TargetType = AbilityTargetType.SingleEnemy
+                });
+
+                em.AddComponentData(playerEntity, new FireballAbility
+                {
+                    ManaCost = 10,
+                    FireDamageBonus = 8,
+                    TargetType = AbilityTargetType.SingleEnemy
+                });
+
                 em.AddComponentData(playerEntity, new InitiativeComponent());
                 em.AddComponent<PlayerTag>(playerEntity);
                 em.AddComponent<InCombatTag>(playerEntity);
@@ -108,6 +122,13 @@ namespace GameName.Systems
                     PositionIndex = i,
                     Team = CombatantTeam.Enemy,
                     IsAlive = true
+                });
+
+                em.AddComponentData(enemyEntity, new BasicAttackAbility
+                {
+                    ManaCost = 0,
+                    WeaponDamageBonus = 3,
+                    TargetType = AbilityTargetType.SingleEnemy
                 });
 
                 em.AddComponentData(enemyEntity, new InitiativeComponent());

@@ -6,7 +6,7 @@ namespace GameName.Systems
 {
     /// <summary>
     /// Simulates turn ending for testing
-    /// In real game, this would be player/AI action system
+    /// Auto-ends turns for BOTH players and enemies
     /// </summary>
     [UpdateInGroup(typeof(SimulationSystemGroup))]
     [UpdateAfter(typeof(CombatDebugSystem))]
@@ -43,6 +43,19 @@ namespace GameName.Systems
                             .ToEntityArray(Unity.Collections.Allocator.Temp))
                     {
                         string name = state.EntityManager.GetName(entity);
+
+                        // Check if it's a player who hasn't acted
+                        bool isPlayer = state.EntityManager.HasComponent<PlayerTag>(entity);
+                        bool hasActed = state.EntityManager.HasComponent<HasActedThisRoundTag>(entity);
+
+                        // If player hasn't acted yet, add HasActedThisRoundTag
+                        // (Enemies already have it from BasicAISystem)
+                        if (isPlayer && !hasActed)
+                        {
+                            state.EntityManager.AddComponent<HasActedThisRoundTag>(entity);
+                            Debug.Log($"[{worldName}] {name} (player) auto-acted, added HasActedThisRoundTag");
+                        }
+
                         Debug.Log($"[{worldName}] {name} ended turn\n");
 
                         // Remove ActiveTurnTag to end turn

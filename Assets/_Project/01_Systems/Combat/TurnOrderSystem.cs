@@ -1,80 +1,123 @@
-using Unity.Burst;
-using Unity.Collections;
 using Unity.Entities;
+using Unity.Collections;
+using UnityEngine;
 using GameName.ComponentData;
 
 namespace GameName.Systems
 {
     /// <summary>
-    /// Manages turn order based on initiative values
+    /// Manages turn order based on initiative
+    /// DEBUG VERSION with extensive logging
     /// </summary>
-    [BurstCompile]
     [UpdateInGroup(typeof(SimulationSystemGroup))]
     [UpdateAfter(typeof(InitiativeRollSystem))]
     public partial struct TurnOrderSystem : ISystem
     {
-        [BurstCompile]
         public void OnCreate(ref SystemState state)
         {
             state.RequireForUpdate<ActiveCombatTag>();
         }
 
-        [BurstCompile]
         public void OnUpdate(ref SystemState state)
         {
-            // Check if anyone currently has active turn
-            var hasActiveTurn = false;
-            foreach (var _ in SystemAPI.Query<RefRO<ActiveTurnTag>>())
-            {
-                hasActiveTurn = true;
-                break;
-            }
+            var worldName = state.WorldUnmanaged.Name.ToString();
 
-            if (!hasActiveTurn)
+            // If no one has active turn, assign next turn
+            if (!SystemAPI.HasSingleton<ActiveTurnTag>())
             {
-                // Find combatant with highest initiative who hasn't acted yet
-                Entity highestInitiativeEntity = Entity.Null;
-                int highestInitiative = int.MinValue;
+                // Count total combatants and those who have acted
+                int totalCombatants = 0;
+                int actedCombatants = 0;
 
-                foreach (var (initiative, combatant, entity) in
-                    SystemAPI.Query<RefRO<InitiativeComponent>,
-                                   RefRO<CombatantComponent>>()
+                var allEntities = new NativeList<Entity>(Allocator.Temp);
+
+                foreach (var entity in
+                    SystemAPI.QueryBuilder()
+                        .WithAll<InCombatTag>()
+                        .WithNone<DefeatedTag>()
+                        .Build()
+                        .ToEntityArray(Allocator.Temp))
+                {
+                    totalCombatants++;
+                    bool hasActed = state.EntityManager.HasComponent<HasActedThisRoundTag>(entity);
+                    if (hasActed)
+                    {
+                        actedCombatants++;
+                    }
+
+                    allEntities.Add(entity);
+
+                    Debug.Log($"[{worldName}] TurnOrder Check: {state.EntityManager.GetName(entity)} " +
+                        $"HasActed={hasActed}");
+                }
+
+                Debug.Log($"[{worldName}] TurnOrder: {actedCombatants}/{totalCombatants} have acted");
+
+                // Check if everyone has acted (new round needed)
+                if (actedCombatants >= totalCombatants && totalCombatants > 0)
+                {
+                    // Everyone has acted - new round!
+                    Debug.Log($"[{worldName}] === NEW ROUND: Removing all HasActedThisRoundTag ===");
+
+                    // Remove HasActedThisRoundTag from everyone
+                    foreach (var entity in allEntities)
+                    {
+                        if (state.EntityManager.HasComponent<HasActedThisRoundTag>(entity))
+                        {
+                            state.EntityManager.RemoveComponent<HasActedThisRoundTag>(entity);
+                            Debug.Log($"[{worldName}] Removed HasActedThisRoundTag from {state.EntityManager.GetName(entity)}");
+                        }
+                    }
+
+                    allEntities.Dispose();
+
+                    // Don't assign new turn yet - let next frame do it
+                    Debug.Log($"[{worldName}] Waiting for next frame to assign first turn of new round");
+                    return;
+                }
+
+                allEntities.Dispose();
+
+                // Find highest initiative without HasActedThisRoundTag
+                var highestInitiative = int.MinValue;
+                var highestEntity = Entity.Null;
+
+                foreach (var (initiative, entity) in
+                    SystemAPI.Query<RefRO<InitiativeComponent>>()
                         .WithEntityAccess()
                         .WithAll<InCombatTag>()
-                        .WithNone<ActiveTurnTag, DefeatedTag, HasActedThisRoundTag>())
+                        .WithNone<DefeatedTag, HasActedThisRoundTag>())
                 {
+                    Debug.Log($"[{worldName}] Candidate: {state.EntityManager.GetName(entity)} " +
+                        $"Initiative={initiative.ValueRO.Total}");
+
                     if (initiative.ValueRO.Total > highestInitiative)
                     {
                         highestInitiative = initiative.ValueRO.Total;
-                        highestInitiativeEntity = entity;
+                        highestEntity = entity;
                     }
                 }
 
-                // If we found someone, give them active turn
-                if (highestInitiativeEntity != Entity.Null)
+                // If found someone, give them active turn
+                if (highestEntity != Entity.Null)
                 {
-                    state.EntityManager.AddComponent<ActiveTurnTag>(
-                        highestInitiativeEntity);
-                    state.EntityManager.AddComponent<HasActedThisRoundTag>(
-                        highestInitiativeEntity);
+                    Debug.Log($"[{worldName}] Assigning turn to {state.EntityManager.GetName(highestEntity)}");
+
+                    state.EntityManager.AddComponent<ActiveTurnTag>(highestEntity);
+
+                    // DO NOT add HasActedThisRoundTag here!
+                    // Let the AI/Player system add it AFTER they act
+
+                    var health = state.EntityManager.GetComponentData<HealthComponent>(highestEntity);
+                    var mana = state.EntityManager.GetComponentData<ManaComponent>(highestEntity);
+
+                    Debug.Log($"[{worldName}] >>> {state.EntityManager.GetName(highestEntity)}'s Turn " +
+                        $"| HP: {health.Current}/{health.Maximum} " +
+                        $"| MP: {mana.Current}/{mana.Maximum}");
                 }
                 else
                 {
-                    // No one left to act - round complete, reset for new round
-                    var ecb = new EntityCommandBuffer(Allocator.Temp);
-
-                    // Remove all HasActedThisRoundTag components
-                    foreach (var entity in
-                        SystemAPI.QueryBuilder()
-                            .WithAll<HasActedThisRoundTag>()
-                            .Build()
-                            .ToEntityArray(Allocator.Temp))
-                    {
-                        ecb.RemoveComponent<HasActedThisRoundTag>(entity);
-                    }
-
-                    ecb.Playback(state.EntityManager);
-                    ecb.Dispose();
+                    Debug.Log($"[{worldName}] No valid entity found for next turn!");
                 }
             }
         }
