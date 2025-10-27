@@ -1,11 +1,13 @@
 {
     "name": "GameName.Authoring",
-    "rootNamespace": "",
+    "rootNamespace": "GameName.Authoring",
     "references": [
-        "GUID:365b5fdd7d4d263498c94b8d216ef38c",
-        "GUID:734d92eba21c94caba915361bd5ac177",
-        "GUID:d8b63aba1907145bea998dd612889d6b",
-        "GUID:e0cd26848372d4e5c891c569017e11f1"
+        "GameName.ComponentData",
+        "Unity.Entities",
+        "Unity.Entities.Hybrid",
+        "Unity.Mathematics",
+        "Unity.Collections",
+        "Unity.Transforms"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],
